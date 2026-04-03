@@ -237,12 +237,16 @@ class ImportService
                 }
             }
 
-            // Group items by category and create categories
-            $categoryMap = $this->createCategories($db, $businessId, $items);
+            // Pre-process items: $0.00 items are category headers, not real items.
+            // Walk through and assign them as categories for items that follow.
+            $processedItems = $this->preprocessItems($items);
 
-            // Insert menu items
+            // Create categories from the processed data
+            $categoryMap = $this->createCategories($db, $businessId, $processedItems);
+
+            // Insert menu items (only real items with price > 0)
             $sortOrder = 0;
-            foreach ($items as $item) {
+            foreach ($processedItems as $item) {
                 try {
                     $categoryId = null;
                     $catName = $item['category'] ?? null;
@@ -264,7 +268,7 @@ class ImportService
                         'name' => $itemName,
                         'slug' => $itemSlug,
                         'description' => $item['description'] ?? null,
-                        'price' => $item['price'] ?? 0.00,
+                        'price' => $item['price'],
                         'sort_order' => $sortOrder,
                     ]);
                     $imported++;
@@ -328,7 +332,7 @@ class ImportService
              (:name, :slug, 'restaurant', :description, :tagline,
               :address_street, :address_city, :address_state, :address_zip,
               :phone, :email, :website_url, :banner_path,
-              'dev', 1, 'America/New_York', 0.0800, 'USD',
+              'live', 1, 'America/New_York', 0.0800, 'USD',
               'free', 'active')"
         );
 
@@ -406,6 +410,38 @@ class ImportService
     {
         $db->prepare("DELETE FROM menu_items WHERE business_id = :id")->execute(['id' => $businessId]);
         $db->prepare("DELETE FROM menu_categories WHERE business_id = :id")->execute(['id' => $businessId]);
+    }
+
+    /**
+     * Pre-process scraped items: items with $0.00 or null price are category headers.
+     * They become the category for all items that follow until the next $0.00 item.
+     *
+     * @param array $items Raw scraped items.
+     * @return array Cleaned items with proper categories (no $0.00 items).
+     */
+    private function preprocessItems(array $items): array
+    {
+        $processed = [];
+        $currentCategory = null;
+
+        foreach ($items as $item) {
+            $price = isset($item['price']) ? (float) $item['price'] : 0.0;
+
+            if ($price <= 0.0) {
+                // This is a category header, not a real item
+                $currentCategory = trim($item['name'] ?? '');
+                continue;
+            }
+
+            // Assign the current running category if item doesn't already have one
+            if (empty($item['category']) && $currentCategory) {
+                $item['category'] = $currentCategory;
+            }
+
+            $processed[] = $item;
+        }
+
+        return $processed;
     }
 
     /**
