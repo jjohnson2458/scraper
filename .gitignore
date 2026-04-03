@@ -1,0 +1,12 @@
+project.txt
+secrets.txt
+.env
+.env.production
+vendor/
+node_modules/
+storage/logs/
+storage/cache/
+storage/sessions/
+*.log
+public/uploads/*
+!public/uploads/.gitkeep

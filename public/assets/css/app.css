@@ -1,0 +1,321 @@
+/* ========================================
+   Claude Scraper - Main Stylesheet
+   Bootstrap 5 small, left sidebar layout
+   Author: J.J. Johnson
+   ======================================== */
+
+:root {
+    --sidebar-width: 240px;
+    --sidebar-collapsed: 60px;
+    --sidebar-bg: #1e293b;
+    --sidebar-text: #cbd5e1;
+    --sidebar-active: #3b82f6;
+    --sidebar-hover: #334155;
+    --body-bg: #f1f5f9;
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--body-bg);
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+/* Sidebar */
+.sidebar {
+    width: var(--sidebar-width);
+    min-height: 100vh;
+    background-color: var(--sidebar-bg);
+    color: var(--sidebar-text);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+    transition: transform 0.3s ease;
+}
+
+.sidebar-header {
+    padding: 1.25rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-header h4 {
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.sidebar-header i { margin-right: 0.5rem; }
+
+.sidebar-nav {
+    flex: 1;
+    padding: 0.75rem 0;
+}
+
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    padding: 0.625rem 1rem;
+    color: var(--sidebar-text);
+    text-decoration: none;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+    gap: 0.75rem;
+}
+
+.sidebar-link:hover {
+    background-color: var(--sidebar-hover);
+    color: #fff;
+}
+
+.sidebar-link.active {
+    background-color: var(--sidebar-hover);
+    color: #fff;
+    border-left-color: var(--sidebar-active);
+}
+
+.sidebar-link i {
+    font-size: 1.1rem;
+    width: 1.25rem;
+    text-align: center;
+}
+
+.sidebar-footer {
+    padding: 0.75rem 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: auto;
+}
+
+.sidebar-user {
+    display: flex;
+    align-items: center;
+    padding: 0.625rem 1rem;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--sidebar-text);
+}
+
+/* Main Content */
+.main-content {
+    flex: 1;
+    min-height: 100vh;
+}
+
+.main-content.with-sidebar {
+    margin-left: var(--sidebar-width);
+}
+
+.main-content.full-width { margin-left: 0; }
+
+/* Page Header */
+.page-header {
+    background: #fff;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.page-header h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+}
+
+.content-area { padding: 1.5rem; }
+
+/* Cards */
+.card {
+    border: none;
+    box-shadow: var(--card-shadow);
+    border-radius: 0.5rem;
+}
+
+.card-header {
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 600;
+    padding: 0.875rem 1.25rem;
+}
+
+/* Stat Cards */
+.stat-card {
+    background: #fff;
+    border-radius: 0.5rem;
+    padding: 1.25rem;
+    box-shadow: var(--card-shadow);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.stat-card .stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.stat-card .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1;
+}
+
+.stat-card .stat-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-top: 0.25rem;
+}
+
+/* Status Badges */
+.badge-pending { background-color: #f59e0b; }
+.badge-processing { background-color: #3b82f6; }
+.badge-complete { background-color: #10b981; }
+.badge-failed { background-color: #ef4444; }
+.badge-imported { background-color: #8b5cf6; }
+.badge-partial { background-color: #f97316; }
+
+/* Tables */
+.table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    font-weight: 600;
+}
+
+/* Scan Tabs */
+.scan-tabs .nav-link {
+    font-weight: 500;
+    color: #64748b;
+}
+
+.scan-tabs .nav-link.active {
+    color: var(--sidebar-active);
+    border-bottom-color: var(--sidebar-active);
+}
+
+.scan-url-input {
+    font-size: 1rem;
+    padding: 0.75rem 1rem;
+}
+
+/* Photo Capture */
+.photo-capture-area {
+    border: 2px dashed #cbd5e1;
+    border-radius: 0.5rem;
+    padding: 3rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.photo-capture-area:hover {
+    border-color: var(--sidebar-active);
+}
+
+.photo-capture-area.dragover {
+    border-color: var(--sidebar-active);
+    background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Editable Cells */
+.editable-cell {
+    cursor: text;
+    min-width: 80px;
+}
+
+.editable-cell:focus {
+    outline: 2px solid var(--sidebar-active);
+    outline-offset: -2px;
+    border-radius: 2px;
+}
+
+/* Login */
+.login-container {
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.login-card {
+    background: #fff;
+    border-radius: 0.75rem;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+}
+
+.login-card h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    color: #1e293b;
+}
+
+/* Mobile Toggle */
+.sidebar-toggle {
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 1100;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive */
+@media (max-width: 991.98px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.show { transform: translateX(0); }
+    .main-content.with-sidebar { margin-left: 0; }
+}
+
+.pagination .page-link {
+    font-size: 0.8rem;
+    padding: 0.375rem 0.625rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: #94a3b8;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.spinner-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}

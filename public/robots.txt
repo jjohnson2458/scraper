@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /api/
+Disallow: /login
+Disallow: /logout
+Disallow: /uploads/
+Allow: /terms
+Allow: /privacy
+
+Sitemap: https://scraper.visionquest2020.net/sitemap.xml
