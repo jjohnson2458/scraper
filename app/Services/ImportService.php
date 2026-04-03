@@ -413,27 +413,63 @@ class ImportService
     }
 
     /**
-     * Pre-process scraped items: items with $0.00 or null price are category headers.
-     * They become the category for all items that follow until the next $0.00 item.
+     * Pre-process scraped items: deduplicate, detect category headers,
+     * and assign categories to items.
+     *
+     * Category detection logic:
+     * 1. Items with $0.00 or null price are always category headers.
+     * 2. Known category names (matching items that appeared as $0.00 headers
+     *    earlier in the list) are treated as headers even if they have a price.
+     * 3. If the same name+price appears multiple times in a row, keep only one.
      *
      * @param array $items Raw scraped items.
-     * @return array Cleaned items with proper categories (no $0.00 items).
+     * @return array Cleaned items with proper categories (no duplicates, no headers).
      */
     private function preprocessItems(array $items): array
     {
+        // Pass 1: Collect known category names ($0.00 or null price items)
+        $knownCategories = [];
+        foreach ($items as $item) {
+            $price = isset($item['price']) ? (float) $item['price'] : 0.0;
+            $name = trim($item['name'] ?? '');
+            if ($price <= 0.0 && !empty($name)) {
+                $knownCategories[strtolower($name)] = $name;
+            }
+        }
+
+        // Pass 2: Walk through items, detect categories, deduplicate
         $processed = [];
         $currentCategory = null;
+        $seen = []; // track name+price to deduplicate
 
         foreach ($items as $item) {
             $price = isset($item['price']) ? (float) $item['price'] : 0.0;
+            $name = trim($item['name'] ?? '');
 
-            if ($price <= 0.0) {
-                // This is a category header, not a real item
-                $currentCategory = trim($item['name'] ?? '');
+            if (empty($name)) {
                 continue;
             }
 
-            // Assign the current running category if item doesn't already have one
+            // Skip $0.00/null price items — they are category headers
+            if ($price <= 0.0) {
+                $currentCategory = $knownCategories[strtolower($name)] ?? $name;
+                continue;
+            }
+
+            // If this name matches a known category, it's a header (with the first item's price)
+            if (isset($knownCategories[strtolower($name)])) {
+                $currentCategory = $knownCategories[strtolower($name)];
+                continue;
+            }
+
+            // Deduplicate: skip if we already have this exact name+price
+            $dedupeKey = strtolower($name) . '|' . number_format($price, 2);
+            if (isset($seen[$dedupeKey])) {
+                continue;
+            }
+            $seen[$dedupeKey] = true;
+
+            // Assign category
             if (empty($item['category']) && $currentCategory) {
                 $item['category'] = $currentCategory;
             }
