@@ -271,6 +271,15 @@ class ImportService
                         'price' => $item['price'],
                         'sort_order' => $sortOrder,
                     ]);
+
+                    $menuItemId = (int) $db->lastInsertId();
+
+                    // Download and save image if available
+                    $imageUrl = $item['image_url'] ?? $item['image_path'] ?? null;
+                    if ($imageUrl && str_starts_with($imageUrl, 'http')) {
+                        $this->importItemPhoto($db, $businessId, $menuItemId, $imageUrl, $itemName);
+                    }
+
                     $imported++;
                 } catch (\Exception $e) {
                     $failed++;
@@ -408,6 +417,7 @@ class ImportService
      */
     private function clearBusinessMenu(\PDO $db, int $businessId): void
     {
+        $db->prepare("DELETE FROM photos WHERE business_id = :id AND photo_type = 'menu_item'")->execute(['id' => $businessId]);
         $db->prepare("DELETE FROM menu_items WHERE business_id = :id")->execute(['id' => $businessId]);
         $db->prepare("DELETE FROM menu_categories WHERE business_id = :id")->execute(['id' => $businessId]);
     }
@@ -565,6 +575,81 @@ class ImportService
         } catch (\Exception $e) {
             $this->errorLog->log('Banner download failed: ' . $e->getMessage(), 'warning', ['url' => $url]);
             return null;
+        }
+    }
+
+    /**
+     * Download a menu item photo and insert into the photos table.
+     *
+     * @param \PDO   $db         The database connection.
+     * @param int    $businessId The business ID.
+     * @param int    $menuItemId The menu item ID.
+     * @param string $imageUrl   The remote image URL.
+     * @param string $itemName   The item name (for alt text).
+     * @return void
+     */
+    private function importItemPhoto(\PDO $db, int $businessId, int $menuItemId, string $imageUrl, string $itemName): void
+    {
+        try {
+            $client = new \GuzzleHttp\Client(['timeout' => 15, 'verify' => false]);
+            $response = $client->get($imageUrl);
+            $contentType = $response->getHeaderLine('Content-Type');
+            $body = (string) $response->getBody();
+
+            if (strlen($body) < 100) {
+                return; // Skip tiny/empty responses
+            }
+
+            $extensions = [
+                'image/jpeg' => 'jpg', 'image/png' => 'png',
+                'image/gif' => 'gif', 'image/webp' => 'webp',
+            ];
+            $ext = $extensions[$contentType] ?? 'jpg';
+            $filename = 'item_' . $menuItemId . '_' . uniqid() . '.' . $ext;
+            $relativePath = '/uploads/menu/' . $businessId;
+
+            // Save to buffaloeats uploads directory
+            $dirs = [
+                '/var/www/html/buffaloeats/public' . $relativePath,
+                'C:/xampp/htdocs/claude_takeout/public' . $relativePath,
+            ];
+
+            $savedPath = null;
+            foreach ($dirs as $dir) {
+                if (is_dir(dirname($dir)) || is_dir(dirname(dirname($dir)))) {
+                    if (!is_dir($dir)) {
+                        mkdir($dir, 0755, true);
+                    }
+                    file_put_contents($dir . '/' . $filename, $body);
+                    $savedPath = $relativePath . '/' . $filename;
+                    break;
+                }
+            }
+
+            if (!$savedPath) {
+                return;
+            }
+
+            $stmt = $db->prepare(
+                "INSERT INTO photos
+                 (business_id, menu_item_id, photo_type, file_name, file_path, original_name, mime_type, file_size, alt_text, is_primary, sort_order)
+                 VALUES (:business_id, :menu_item_id, 'menu_item', :file_name, :file_path, :original_name, :mime_type, :file_size, :alt_text, 1, 0)"
+            );
+            $stmt->execute([
+                'business_id' => $businessId,
+                'menu_item_id' => $menuItemId,
+                'file_name' => $filename,
+                'file_path' => $savedPath,
+                'original_name' => basename($imageUrl),
+                'mime_type' => $contentType ?: 'image/jpeg',
+                'file_size' => strlen($body),
+                'alt_text' => $itemName,
+            ]);
+        } catch (\Exception $e) {
+            // Don't fail the whole import over a single image
+            $this->errorLog->log('Item photo download failed: ' . $e->getMessage(), 'warning', [
+                'url' => $imageUrl, 'menu_item_id' => $menuItemId,
+            ]);
         }
     }
 
