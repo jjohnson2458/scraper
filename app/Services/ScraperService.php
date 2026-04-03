@@ -3,7 +3,11 @@
 namespace App\Services;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ClientException;
 use Symfony\Component\DomCrawler\Crawler;
+use Facebook\WebDriver\Remote\RemoteWebDriver;
+use Facebook\WebDriver\Remote\DesiredCapabilities;
+use Facebook\WebDriver\Chrome\ChromeOptions;
 use App\Models\ErrorLog;
 
 /**
@@ -72,39 +76,180 @@ class ScraperService
      */
     public function scrapeUrl(string $url): array
     {
+        // Try Guzzle first (fast, no browser needed)
         try {
             $response = $this->httpClient->get($url);
             $html = (string) $response->getBody();
-            $crawler = new Crawler($html, $url);
 
-            // Extract page title
-            $title = $this->extractTitle($crawler);
-
-            // Try structured data first (JSON-LD, Microdata)
-            $items = $this->extractStructuredData($crawler);
-
-            // Fall back to DOM-based extraction
-            if (empty($items)) {
-                $items = $this->extractFromDom($crawler, $url);
+            // Detect Cloudflare/bot protection pages
+            if ($this->isBotProtectionPage($html)) {
+                return $this->scrapeWithSelenium($url);
             }
 
-            // Extract images for items
-            $items = $this->enrichWithImages($crawler, $items, $url);
+            return $this->parseHtml($html, $url);
 
-            return [
-                'success' => true,
-                'items' => $items,
-                'title' => $title,
-                'error' => null,
-                'source_html' => mb_substr($html, 0, 50000),
-            ];
+        } catch (ClientException $e) {
+            $code = $e->getResponse()->getStatusCode();
+            // 403 Forbidden or 503 Service Unavailable = likely bot protection
+            if (in_array($code, [403, 503])) {
+                $this->errorLog->log("HTTP {$code} from Guzzle, falling back to Selenium", 'info', ['url' => $url]);
+                return $this->scrapeWithSelenium($url);
+            }
+            $this->errorLog->log($e->getMessage(), 'error', ['url' => $url]);
+            return ['success' => false, 'items' => [], 'title' => null, 'error' => "HTTP {$code}: Site blocked the request. Selenium fallback also failed or is unavailable."];
+
         } catch (\Exception $e) {
             $this->errorLog->log($e->getMessage(), 'error', ['url' => $url]);
+            return ['success' => false, 'items' => [], 'title' => null, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Check if the HTML looks like a bot protection / challenge page.
+     *
+     * @param string $html The response HTML.
+     * @return bool
+     */
+    private function isBotProtectionPage(string $html): bool
+    {
+        $indicators = [
+            'Just a moment...',
+            'Checking your browser',
+            'cf-browser-verification',
+            'challenge-platform',
+            '_cf_chl',
+            'Attention Required',
+            'Access denied',
+            'Please enable JavaScript',
+            'DDoS protection by',
+        ];
+
+        foreach ($indicators as $indicator) {
+            if (stripos($html, $indicator) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Parse HTML content into structured menu items.
+     *
+     * @param string $html The HTML content.
+     * @param string $url  The source URL.
+     * @return array
+     */
+    private function parseHtml(string $html, string $url): array
+    {
+        $crawler = new Crawler($html, $url);
+
+        $title = $this->extractTitle($crawler);
+        $items = $this->extractStructuredData($crawler);
+
+        if (empty($items)) {
+            $items = $this->extractFromDom($crawler, $url);
+        }
+
+        $items = $this->enrichWithImages($crawler, $items, $url);
+
+        return [
+            'success' => true,
+            'items' => $items,
+            'title' => $title,
+            'error' => null,
+            'source_html' => mb_substr($html, 0, 50000),
+        ];
+    }
+
+    /**
+     * Scrape a URL using Selenium WebDriver (for JS-rendered or bot-protected pages).
+     *
+     * Falls back gracefully if Selenium/ChromeDriver is not available.
+     *
+     * @param string $url The target URL.
+     * @return array
+     */
+    private function scrapeWithSelenium(string $url): array
+    {
+        $driver = null;
+        try {
+            $options = new ChromeOptions();
+            $options->addArguments([
+                '--headless',
+                '--disable-gpu',
+                '--no-sandbox',
+                '--disable-dev-shm-usage',
+                '--window-size=1920,1080',
+                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            ]);
+
+            $capabilities = DesiredCapabilities::chrome();
+            $capabilities->setCapability(ChromeOptions::CAPABILITY, $options);
+
+            // Try common Selenium server URLs
+            $seleniumUrls = [
+                'http://localhost:4444/wd/hub',
+                'http://localhost:4444',
+                'http://localhost:9515',  // ChromeDriver standalone
+            ];
+
+            $driver = null;
+            foreach ($seleniumUrls as $seleniumUrl) {
+                try {
+                    $driver = RemoteWebDriver::create($seleniumUrl, $capabilities, 10000, 10000);
+                    break;
+                } catch (\Exception $e) {
+                    continue;
+                }
+            }
+
+            if (!$driver) {
+                return [
+                    'success' => false,
+                    'items' => [],
+                    'title' => null,
+                    'error' => 'Site requires a browser to load (bot protection detected). Selenium WebDriver is not running. Start ChromeDriver or Selenium Server and try again.',
+                ];
+            }
+
+            $driver->get($url);
+
+            // Wait for page to load (JS rendering, Cloudflare challenge)
+            sleep(5);
+
+            // Check if still on a challenge page, wait longer
+            $pageSource = $driver->getPageSource();
+            if ($this->isBotProtectionPage($pageSource)) {
+                sleep(10);
+                $pageSource = $driver->getPageSource();
+            }
+
+            // If still blocked after waiting
+            if ($this->isBotProtectionPage($pageSource)) {
+                $driver->quit();
+                return [
+                    'success' => false,
+                    'items' => [],
+                    'title' => null,
+                    'error' => 'Site bot protection could not be bypassed even with a browser. Try taking a photo of the menu instead.',
+                ];
+            }
+
+            $result = $this->parseHtml($pageSource, $url);
+            $driver->quit();
+            return $result;
+
+        } catch (\Exception $e) {
+            if ($driver) {
+                try { $driver->quit(); } catch (\Exception $ignored) {}
+            }
+            $this->errorLog->log('Selenium scrape failed: ' . $e->getMessage(), 'error', ['url' => $url]);
             return [
                 'success' => false,
                 'items' => [],
                 'title' => null,
-                'error' => $e->getMessage(),
+                'error' => 'Browser-based scraping failed: ' . $e->getMessage(),
             ];
         }
     }
