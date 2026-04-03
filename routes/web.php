@@ -59,6 +59,7 @@ $router->post('/api/scans/preview', ApiController::class, 'previewScrape', $auth
 $router->post('/api/ocr/process', ApiController::class, 'processOcr', $authCsrf, 'api.ocr');
 $router->get('/api/scans/{id}/items', ApiController::class, 'getScanItems', $auth, 'api.scan_items');
 $router->put('/api/scans/{id}/items', ApiController::class, 'updateScanItems', $authCsrf, 'api.update_items');
+$router->post('/api/scans/{id}/images', ApiController::class, 'updateScanImages', $authCsrf, 'api.scan_images');
 $router->get('/api/platforms', ApiController::class, 'getPlatforms', $auth, 'api.platforms');
 $router->get('/api/platforms/{slug}/stores', ApiController::class, 'getStores', $auth, 'api.stores');
 

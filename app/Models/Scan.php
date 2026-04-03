@@ -21,7 +21,7 @@ class Scan extends BaseModel
     /** @var array<string> Mass-assignable columns */
     protected array $fillable = [
         'user_id', 'source_type', 'source_value', 'title',
-        'status', 'item_count', 'error_message'
+        'status', 'item_count', 'error_message', 'banner_url', 'logo_url'
     ];
 
     /**

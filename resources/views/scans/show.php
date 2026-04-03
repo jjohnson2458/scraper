@@ -64,6 +64,34 @@
             </div>
         </div>
         <div class="col-md-4">
+            <!-- Store Images -->
+            <div class="card mb-3">
+                <div class="card-header">Store Images</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label for="banner_url" class="form-label small">Banner / Hero Image URL</label>
+                        <input type="url" class="form-control form-control-sm" id="banner_url"
+                               value="<?= e($scan['banner_url'] ?? '') ?>"
+                               placeholder="https://example.com/banner.jpg">
+                        <?php if (!empty($scan['banner_url'])): ?>
+                        <img src="<?= e($scan['banner_url']) ?>" alt="Banner preview" class="img-fluid rounded mt-1" style="max-height: 80px;">
+                        <?php endif; ?>
+                    </div>
+                    <div class="mb-2">
+                        <label for="logo_url" class="form-label small">Logo Image URL</label>
+                        <input type="url" class="form-control form-control-sm" id="logo_url"
+                               value="<?= e($scan['logo_url'] ?? '') ?>"
+                               placeholder="https://example.com/logo.png">
+                        <?php if (!empty($scan['logo_url'])): ?>
+                        <img src="<?= e($scan['logo_url']) ?>" alt="Logo preview" class="img-fluid rounded mt-1" style="max-height: 60px;">
+                        <?php endif; ?>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm w-100" id="btn-save-images">
+                        <i class="bi bi-save me-1"></i> Save Image URLs
+                    </button>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header">Categories</div>
                 <div class="card-body">
@@ -203,5 +231,50 @@ document.getElementById('btn-save-items')?.addEventListener('click', async funct
         this.disabled = false;
         this.innerHTML = '<i class="bi bi-save me-1"></i> Save Changes';
     }
+});
+
+// Save image URLs
+document.getElementById('btn-save-images')?.addEventListener('click', async function() {
+    const bannerUrl = document.getElementById('banner_url').value;
+    const logoUrl = document.getElementById('logo_url').value;
+
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+    try {
+        const resp = await fetch('/api/scans/<?= (int)$scan['id'] ?>/images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': window.CSRF_TOKEN },
+            body: JSON.stringify({ _csrf_token: window.CSRF_TOKEN, banner_url: bannerUrl, logo_url: logoUrl })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            this.innerHTML = '<i class="bi bi-check me-1"></i> Saved!';
+            setTimeout(() => { this.innerHTML = '<i class="bi bi-save me-1"></i> Save Image URLs'; this.disabled = false; }, 2000);
+        }
+    } catch (err) {
+        alert('Save failed: ' + err.message);
+        this.disabled = false;
+        this.innerHTML = '<i class="bi bi-save me-1"></i> Save Image URLs';
+    }
+});
+
+// Preview images on URL change
+['banner_url', 'logo_url'].forEach(function(id) {
+    document.getElementById(id)?.addEventListener('change', function() {
+        const img = this.parentElement.querySelector('img');
+        if (this.value) {
+            if (img) {
+                img.src = this.value;
+            } else {
+                const newImg = document.createElement('img');
+                newImg.src = this.value;
+                newImg.className = 'img-fluid rounded mt-1';
+                newImg.style.maxHeight = id === 'banner_url' ? '80px' : '60px';
+                newImg.alt = id === 'banner_url' ? 'Banner preview' : 'Logo preview';
+                this.parentElement.appendChild(newImg);
+            }
+        }
+    });
 });
 </script>

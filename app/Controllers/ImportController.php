@@ -125,7 +125,8 @@ class ImportController extends BaseController
             'phone' => $this->input('phone'),
             'email' => $this->input('store_email'),
             'website_url' => $this->input('website_url', $scan['source_type'] === 'url' ? $scan['source_value'] : null),
-            'banner_url' => $this->rawInput('banner_url'),
+            'banner_url' => $this->rawInput('banner_url', $scan['banner_url'] ?? null),
+            'logo_url' => $this->rawInput('logo_url', $scan['logo_url'] ?? null),
         ];
 
         // Create import record

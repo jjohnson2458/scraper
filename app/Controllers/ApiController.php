@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Core\BaseController;
+use App\Models\Scan;
 use App\Models\ScanItem;
 use App\Services\ScraperService;
 use App\Services\OcrService;
@@ -114,5 +115,31 @@ class ApiController extends BaseController
     {
         $importService = new ImportService();
         $this->json(['stores' => $importService->getStores($slug)]);
+    }
+
+    /**
+     * Update banner_url and logo_url for a scan (AJAX).
+     *
+     * @param string $id The scan ID.
+     * @return void
+     */
+    public function updateScanImages(string $id): void
+    {
+        $rawBody = file_get_contents('php://input');
+        $data = json_decode($rawBody, true);
+
+        $scanModel = new Scan();
+        $scan = $scanModel->find((int) $id);
+        if (!$scan) {
+            $this->json(['error' => 'Scan not found'], 404);
+            return;
+        }
+
+        $scanModel->update((int) $id, [
+            'banner_url' => $data['banner_url'] ?? null,
+            'logo_url' => $data['logo_url'] ?? null,
+        ]);
+
+        $this->json(['success' => true]);
     }
 }

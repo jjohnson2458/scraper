@@ -87,10 +87,28 @@
                                 <i class="bi bi-info-circle text-muted" title="URL to the restaurant's hero banner image"></i>
                             </label>
                             <input type="url" name="banner_url" id="banner_url" class="form-control form-control-sm"
+                                   value="<?= e($scan['banner_url'] ?? '') ?>"
                                    placeholder="https://example.com/banner.jpg">
+                            <?php if (!empty($scan['banner_url'])): ?>
+                            <img src="<?= e($scan['banner_url']) ?>" alt="Banner preview" class="img-fluid rounded mt-1" style="max-height: 80px;">
+                            <?php else: ?>
                             <div id="banner-preview" class="mt-2" style="display:none;">
                                 <img id="banner-preview-img" src="" alt="Banner preview" class="img-fluid rounded" style="max-height: 120px;">
                             </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="mb-2">
+                            <label for="logo_url" class="form-label">
+                                Logo Image URL
+                                <i class="bi bi-info-circle text-muted" title="URL to the restaurant's logo"></i>
+                            </label>
+                            <input type="url" name="logo_url" id="logo_url" class="form-control form-control-sm"
+                                   value="<?= e($scan['logo_url'] ?? '') ?>"
+                                   placeholder="https://example.com/logo.png">
+                            <?php if (!empty($scan['logo_url'])): ?>
+                            <img src="<?= e($scan['logo_url']) ?>" alt="Logo preview" class="img-fluid rounded mt-1" style="max-height: 60px;">
+                            <?php endif; ?>
                         </div>
 
                         <div class="mb-2">

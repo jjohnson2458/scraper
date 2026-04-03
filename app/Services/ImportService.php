@@ -230,10 +230,19 @@ class ImportService
 
             // Download and set banner image if provided
             if (!empty($storeMeta['banner_url'])) {
-                $bannerPath = $this->downloadBanner($storeMeta['banner_url'], $businessId);
+                $bannerPath = $this->downloadStoreImage($storeMeta['banner_url'], $businessId, 'banner');
                 if ($bannerPath) {
                     $db->prepare("UPDATE businesses SET banner_path = :path WHERE id = :id")
                        ->execute(['path' => $bannerPath, 'id' => $businessId]);
+                }
+            }
+
+            // Download and set logo image if provided
+            if (!empty($storeMeta['logo_url'])) {
+                $logoPath = $this->downloadStoreImage($storeMeta['logo_url'], $businessId, 'logo');
+                if ($logoPath) {
+                    $db->prepare("UPDATE businesses SET logo_path = :path WHERE id = :id")
+                       ->execute(['path' => $logoPath, 'id' => $businessId]);
                 }
             }
 
@@ -535,13 +544,14 @@ class ImportService
     }
 
     /**
-     * Download a banner image and save it for the business.
+     * Download a store image (banner or logo) and save it.
      *
-     * @param string $url        The banner image URL.
+     * @param string $url        The image URL.
      * @param int    $businessId The business ID.
+     * @param string $type       The image type ('banner' or 'logo').
      * @return string|null The saved path or null on failure.
      */
-    private function downloadBanner(string $url, int $businessId): ?string
+    private function downloadStoreImage(string $url, int $businessId, string $type = 'banner'): ?string
     {
         try {
             $client = new \GuzzleHttp\Client(['timeout' => 15, 'verify' => false]);
@@ -553,7 +563,7 @@ class ImportService
                 'image/gif' => 'gif', 'image/webp' => 'webp',
             ];
             $ext = $extensions[$contentType] ?? 'jpg';
-            $filename = "banner_demo_{$businessId}.{$ext}";
+            $filename = "{$type}_demo_{$businessId}.{$ext}";
 
             // Save to buffaloeats uploads directory
             $dirs = [

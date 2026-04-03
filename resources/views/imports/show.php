@@ -6,6 +6,29 @@
 </div>
 
 <div class="content-area">
+    <?php
+    // Build demo store link for buffaloeats
+    $storeSlug = $import['target_store_slug'] ?? '';
+    $demoStoreUrl = null;
+    if ($import['target_platform'] === 'buffaloeats' && !empty($storeSlug)) {
+        $demoStoreUrl = "https://{$storeSlug}.buffaloeatsonline.com";
+    }
+    ?>
+
+    <?php if ($demoStoreUrl && in_array($import['status'], ['complete', 'partial'])): ?>
+    <div class="card mb-3" style="border-left: 4px solid #10b981;">
+        <div class="card-body d-flex align-items-center justify-content-between">
+            <div>
+                <h5 class="mb-1"><i class="bi bi-shop me-2"></i>Demo Store is Live</h5>
+                <p class="text-muted mb-0 small"><?= e($demoStoreUrl) ?></p>
+            </div>
+            <a href="<?= e($demoStoreUrl) ?>" target="_blank" rel="noopener" class="btn btn-success">
+                <i class="bi bi-box-arrow-up-right me-1"></i> View Demo Store
+            </a>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div class="card">
         <div class="card-header">Import Details</div>
         <div class="card-body">
@@ -28,7 +51,15 @@
             <hr>
             <div class="row mb-2">
                 <div class="col-sm-3 text-muted">Target Store</div>
-                <div class="col-sm-9"><?= e($import['target_store_slug'] ?? 'Default') ?></div>
+                <div class="col-sm-9">
+                    <?php if ($demoStoreUrl): ?>
+                    <a href="<?= e($demoStoreUrl) ?>" target="_blank" rel="noopener">
+                        <?= e($storeSlug) ?> <i class="bi bi-box-arrow-up-right ms-1"></i>
+                    </a>
+                    <?php else: ?>
+                    <?= e($storeSlug ?: 'Default') ?>
+                    <?php endif; ?>
+                </div>
             </div>
             <hr>
             <div class="row mb-2">
