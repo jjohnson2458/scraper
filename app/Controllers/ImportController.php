@@ -113,6 +113,21 @@ class ImportController extends BaseController
             return;
         }
 
+        // Collect store metadata from form
+        $storeMeta = [
+            'store_name' => $this->input('store_name', $scan['title'] ?? 'Demo Restaurant'),
+            'description' => $this->input('store_description'),
+            'tagline' => $this->input('store_tagline'),
+            'address_street' => $this->input('address_street'),
+            'address_city' => $this->input('address_city'),
+            'address_state' => $this->input('address_state'),
+            'address_zip' => $this->input('address_zip'),
+            'phone' => $this->input('phone'),
+            'email' => $this->input('store_email'),
+            'website_url' => $this->input('website_url', $scan['source_type'] === 'url' ? $scan['source_value'] : null),
+            'banner_url' => $this->rawInput('banner_url'),
+        ];
+
         // Create import record
         $importId = $this->importModel->create([
             'scan_id' => $scanId,
@@ -124,14 +139,21 @@ class ImportController extends BaseController
         ]);
 
         // Execute import
-        $result = $this->importService->importItems($platform, $storeSlug, $items);
+        $result = $this->importService->importItems($platform, $storeSlug, $items, $storeMeta);
 
-        $this->importModel->update($importId, [
+        $updateData = [
             'status' => $result['status'],
             'imported_items' => $result['imported'],
             'failed_items' => $result['failed'],
             'error_log' => !empty($result['errors']) ? json_encode($result['errors']) : null,
-        ]);
+        ];
+
+        // Update the slug to the actual demo slug that was created
+        if (!empty($result['store_slug'])) {
+            $updateData['target_store_slug'] = $result['store_slug'];
+        }
+
+        $this->importModel->update($importId, $updateData);
 
         // Update scan status
         if ($result['status'] === 'complete') {
