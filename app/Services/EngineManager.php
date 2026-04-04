@@ -5,6 +5,11 @@ namespace App\Services;
 use App\Services\Engines\EngineInterface;
 use App\Services\Engines\GenericEngine;
 use App\Services\Engines\ToastEngine;
+use App\Services\Engines\DoorDashEngine;
+use App\Services\Engines\UberEatsEngine;
+use App\Services\Engines\GrubhubEngine;
+use App\Services\Engines\ChowNowEngine;
+use App\Services\Engines\SquareEngine;
 use App\Models\Platform;
 
 /**
@@ -47,12 +52,11 @@ class EngineManager
     {
         $this->engines = [
             new ToastEngine(),
-            // Future engines will be added here:
-            // new DoorDashEngine(),
-            // new UberEatsEngine(),
-            // new GrubhubEngine(),
-            // new ChowNowEngine(),
-            // new SquareEngine(),
+            new DoorDashEngine(),
+            new UberEatsEngine(),
+            new GrubhubEngine(),
+            new ChowNowEngine(),
+            new SquareEngine(),
         ];
     }
 
