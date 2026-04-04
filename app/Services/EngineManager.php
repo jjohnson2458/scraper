@@ -10,6 +10,14 @@ use App\Services\Engines\UberEatsEngine;
 use App\Services\Engines\GrubhubEngine;
 use App\Services\Engines\ChowNowEngine;
 use App\Services\Engines\SquareEngine;
+use App\Services\Engines\CloverEngine;
+use App\Services\Engines\OloEngine;
+use App\Services\Engines\BentoBoxEngine;
+use App\Services\Engines\PopmenuEngine;
+use App\Services\Engines\SinglePlatformEngine;
+use App\Services\Engines\MenufyEngine;
+use App\Services\Engines\YelpEngine;
+use App\Services\Engines\GoogleMapsEngine;
 use App\Models\Platform;
 
 /**
@@ -51,12 +59,22 @@ class EngineManager
     private function registerEngines(): void
     {
         $this->engines = [
+            // Phase 2: High priority
             new ToastEngine(),
             new DoorDashEngine(),
             new UberEatsEngine(),
             new GrubhubEngine(),
             new ChowNowEngine(),
             new SquareEngine(),
+            // Phase 3: Medium priority
+            new CloverEngine(),
+            new OloEngine(),
+            new BentoBoxEngine(),
+            new PopmenuEngine(),
+            new SinglePlatformEngine(),
+            new MenufyEngine(),
+            new YelpEngine(),
+            new GoogleMapsEngine(),
         ];
     }
 
