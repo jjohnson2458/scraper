@@ -18,6 +18,14 @@ use App\Services\Engines\SinglePlatformEngine;
 use App\Services\Engines\MenufyEngine;
 use App\Services\Engines\YelpEngine;
 use App\Services\Engines\GoogleMapsEngine;
+use App\Services\Engines\OwnerEngine;
+use App\Services\Engines\SpotOnEngine;
+use App\Services\Engines\LightspeedEngine;
+use App\Services\Engines\GloriaFoodEngine;
+use App\Services\Engines\NineFoldEngine;
+use App\Services\Engines\MenulogEngine;
+use App\Services\Engines\TripAdvisorEngine;
+use App\Services\Engines\AllmenusEngine;
 use App\Models\Platform;
 
 /**
@@ -75,6 +83,15 @@ class EngineManager
             new MenufyEngine(),
             new YelpEngine(),
             new GoogleMapsEngine(),
+            // Phase 4: Low priority
+            new OwnerEngine(),
+            new SpotOnEngine(),
+            new LightspeedEngine(),
+            new GloriaFoodEngine(),
+            new NineFoldEngine(),
+            new MenulogEngine(),
+            new TripAdvisorEngine(),
+            new AllmenusEngine(),
         ];
     }
 
