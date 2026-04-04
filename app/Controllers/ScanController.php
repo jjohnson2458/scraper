@@ -6,6 +6,7 @@ use App\Core\BaseController;
 use App\Models\Scan;
 use App\Models\ScanItem;
 use App\Services\ScraperService;
+use App\Services\EngineManager;
 use App\Services\OcrService;
 use App\Models\ErrorLog;
 
@@ -78,10 +79,14 @@ class ScanController extends BaseController
         $activeTab = $this->input('tab', 'url');
         $tesseractStatus = $this->ocr->checkTesseract();
 
+        $engineManager = new EngineManager();
+        $platforms = $engineManager->getPlatformsForDropdown();
+
         $this->render('scans.create', [
             'pageTitle' => 'New Scan - Claude Scraper',
             'activeTab' => $activeTab,
             'tesseractInstalled' => $tesseractStatus['installed'],
+            'platforms' => $platforms,
             'useReact' => true,
         ]);
     }
@@ -96,6 +101,8 @@ class ScanController extends BaseController
         $this->validateCsrf();
 
         $url = $this->rawInput('url');
+        $platformSlug = $this->input('platform', 'auto');
+
         if (empty($url) || !filter_var($url, FILTER_VALIDATE_URL)) {
             $this->flash('error', 'Please enter a valid URL.');
             $this->redirect('/scans/new');
@@ -110,20 +117,31 @@ class ScanController extends BaseController
             'status' => 'processing',
         ]);
 
-        // Run scraper
-        $result = $this->scraper->scrapeUrl($url);
+        // Run scraper via EngineManager
+        $engineManager = new EngineManager();
+        $result = $engineManager->scrape($url, $platformSlug);
 
         if ($result['success'] && !empty($result['items'])) {
-            // Save items
             $count = $this->scanItemModel->bulkInsert($scanId, $result['items']);
 
-            $this->scanModel->update($scanId, [
-                'title' => $result['title'],
+            $updateData = [
+                'title' => $result['restaurant']['name'] ?? $result['title'] ?? null,
                 'status' => 'complete',
                 'item_count' => $count,
-            ]);
+            ];
 
-            $this->flash('success', "Scan complete! {$count} items extracted.");
+            // Save restaurant banner/logo if detected
+            if (!empty($result['restaurant']['banner_url'])) {
+                $updateData['banner_url'] = $result['restaurant']['banner_url'];
+            }
+            if (!empty($result['restaurant']['logo_url'])) {
+                $updateData['logo_url'] = $result['restaurant']['logo_url'];
+            }
+
+            $this->scanModel->update($scanId, $updateData);
+
+            $platformName = $result['platform']['name'] ?? 'Generic';
+            $this->flash('success', "Scan complete! {$count} items extracted via {$platformName} engine.");
             $this->redirect("/scans/{$scanId}");
         } else {
             $error = $result['error'] ?? 'No menu items could be extracted.';

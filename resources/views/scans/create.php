@@ -28,11 +28,42 @@
                     </p>
                     <form method="POST" action="/scans/url" id="url-scan-form">
                         <?= csrf_field() ?>
-                        <div class="mb-3">
-                            <label for="url" class="form-label">Menu URL</label>
-                            <input type="url" class="form-control scan-url-input" id="url" name="url"
-                                   placeholder="https://example-restaurant.com/menu"
-                                   required aria-label="Restaurant menu URL">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label for="platform" class="form-label">Platform</label>
+                                <select name="platform" id="platform" class="form-select" aria-label="Select platform">
+                                    <?php
+                                    $lastGroup = null;
+                                    foreach ($platforms ?? [] as $p):
+                                        if ($p['group_label'] && $p['group_label'] !== $lastGroup):
+                                            if ($lastGroup) echo '</optgroup>';
+                                            $lastGroup = $p['group_label'];
+                                            echo '<optgroup label="' . e($lastGroup) . '">';
+                                        endif;
+                                    ?>
+                                    <option value="<?= e($p['slug']) ?>"
+                                            <?= !$p['is_active'] && $p['slug'] !== 'auto' ? 'disabled' : '' ?>
+                                            <?= $p['slug'] === 'auto' ? 'selected' : '' ?>>
+                                        <?= e($p['name']) ?>
+                                        <?php if ($p['slug'] !== 'auto'): ?>
+                                            <?php if ($p['health_status'] === 'green'): ?> ●<?php endif; ?>
+                                            <?php if ($p['health_status'] === 'red'): ?> ○<?php endif; ?>
+                                            <?php if (!$p['is_active']): ?> (coming soon)<?php endif; ?>
+                                        <?php endif; ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                    <?php if ($lastGroup) echo '</optgroup>'; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-8">
+                                <label for="url" class="form-label">Menu URL</label>
+                                <input type="url" class="form-control scan-url-input" id="url" name="url"
+                                       placeholder="https://order.toasttab.com/online/restaurant-name"
+                                       required aria-label="Restaurant menu URL">
+                            </div>
+                        </div>
+                        <div id="detected-platform" class="mb-3" style="display:none;">
+                            <small class="text-success"><i class="bi bi-check-circle me-1"></i>Detected: <strong id="detected-name"></strong></small>
                         </div>
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary" id="btn-scrape-url">
@@ -103,6 +134,33 @@
 </div>
 
 <script>
+// Platform auto-detect from URL
+const platformPatterns = {
+    <?php foreach ($platforms ?? [] as $p): ?>
+    <?php if (!empty($p['url_pattern'])): ?>
+    '<?= e($p['slug']) ?>': { pattern: /<?= $p['url_pattern'] ?>/i, name: '<?= e($p['name']) ?>' },
+    <?php endif; ?>
+    <?php endforeach; ?>
+};
+
+document.getElementById('url')?.addEventListener('input', function() {
+    const url = this.value;
+    const detected = document.getElementById('detected-platform');
+    const detectedName = document.getElementById('detected-name');
+    const platformSelect = document.getElementById('platform');
+
+    if (platformSelect.value !== 'auto') return; // Don't override manual selection
+
+    for (const [slug, config] of Object.entries(platformPatterns)) {
+        if (config.pattern.test(url)) {
+            detected.style.display = 'block';
+            detectedName.textContent = config.name;
+            return;
+        }
+    }
+    detected.style.display = 'none';
+});
+
 // Photo upload handling
 document.getElementById('drop-zone').addEventListener('click', function() {
     document.getElementById('photo-input').click();
