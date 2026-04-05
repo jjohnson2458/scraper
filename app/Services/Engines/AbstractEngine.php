@@ -147,7 +147,7 @@ abstract class AbstractEngine implements EngineInterface
 
         foreach ($seleniumUrls as $seleniumUrl) {
             try {
-                $driver = \Facebook\WebDriver\Remote\RemoteWebDriver::create($seleniumUrl, $capabilities, 10000, 10000);
+                $driver = \Facebook\WebDriver\Remote\RemoteWebDriver::create($seleniumUrl, $capabilities, 60000, 60000);
                 break;
             } catch (\Exception $e) {
                 continue;
