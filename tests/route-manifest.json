@@ -1,0 +1,269 @@
+{
+    "project": "claude_scraper",
+    "framework": "mvc",
+    "route_file": "web.php",
+    "generated": "2026-04-04 05:31:11",
+    "total": 26,
+    "routes": [
+        {
+            "method": "GET",
+            "path": "/login",
+            "auth": "none",
+            "role": null,
+            "expected_status": 200,
+            "skip": false,
+            "section": "Public routes",
+            "line": 25
+        },
+        {
+            "method": "POST",
+            "path": "/login",
+            "auth": "none",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "Public routes",
+            "line": 26
+        },
+        {
+            "method": "GET",
+            "path": "/logout",
+            "auth": "none",
+            "role": null,
+            "expected_status": 200,
+            "skip": false,
+            "section": "Public routes",
+            "line": 27
+        },
+        {
+            "method": "GET",
+            "path": "/terms",
+            "auth": "none",
+            "role": null,
+            "expected_status": 200,
+            "skip": false,
+            "section": "Legal pages",
+            "line": 30
+        },
+        {
+            "method": "GET",
+            "path": "/privacy",
+            "auth": "none",
+            "role": null,
+            "expected_status": 200,
+            "skip": false,
+            "section": "Legal pages",
+            "line": 31
+        },
+        {
+            "method": "GET",
+            "path": "/",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": false,
+            "section": "Dashboard",
+            "line": 38
+        },
+        {
+            "method": "GET",
+            "path": "/dashboard",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": false,
+            "section": "Dashboard",
+            "line": 39
+        },
+        {
+            "method": "GET",
+            "path": "/scans",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": false,
+            "section": "Scans",
+            "line": 42
+        },
+        {
+            "method": "GET",
+            "path": "/scans/new",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": false,
+            "section": "Scans",
+            "line": 43
+        },
+        {
+            "method": "POST",
+            "path": "/scans/url",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "Scans",
+            "line": 44
+        },
+        {
+            "method": "POST",
+            "path": "/scans/photo",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "Scans",
+            "line": 45
+        },
+        {
+            "method": "GET",
+            "path": "/scans/{id}",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "Scans",
+            "line": 46
+        },
+        {
+            "method": "POST",
+            "path": "/scans/{id}/save",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "Scans",
+            "line": 47
+        },
+        {
+            "method": "DELETE",
+            "path": "/scans/{id}",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "Scans",
+            "line": 48
+        },
+        {
+            "method": "GET",
+            "path": "/scans/{id}/export",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "Scans",
+            "line": 49
+        },
+        {
+            "method": "GET",
+            "path": "/imports",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": false,
+            "section": "Imports",
+            "line": 52
+        },
+        {
+            "method": "GET",
+            "path": "/imports/new/{scanId}",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "Imports",
+            "line": 53
+        },
+        {
+            "method": "POST",
+            "path": "/imports",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "Imports",
+            "line": 54
+        },
+        {
+            "method": "GET",
+            "path": "/imports/{id}",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "Imports",
+            "line": 55
+        },
+        {
+            "method": "POST",
+            "path": "/api/scans/preview",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "API endpoints (internal, JSON responses)",
+            "line": 58
+        },
+        {
+            "method": "POST",
+            "path": "/api/ocr/process",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "API endpoints (internal, JSON responses)",
+            "line": 59
+        },
+        {
+            "method": "GET",
+            "path": "/api/scans/{id}/items",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "API endpoints (internal, JSON responses)",
+            "line": 60
+        },
+        {
+            "method": "PUT",
+            "path": "/api/scans/{id}/items",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "API endpoints (internal, JSON responses)",
+            "line": 61
+        },
+        {
+            "method": "POST",
+            "path": "/api/scans/{id}/images",
+            "auth": "user",
+            "role": null,
+            "expected_status": 200,
+            "skip": true,
+            "section": "API endpoints (internal, JSON responses)",
+            "line": 62
+        },
+        {
+            "method": "GET",
+            "path": "/api/platforms",
+            "auth": "user",
+            "role": "admin",
+            "expected_status": 200,
+            "skip": false,
+            "section": "API endpoints (internal, JSON responses)",
+            "line": 63
+        },
+        {
+            "method": "GET",
+            "path": "/api/platforms/{slug}/stores",
+            "auth": "user",
+            "role": "admin",
+            "expected_status": 200,
+            "skip": true,
+            "section": "API endpoints (internal, JSON responses)",
+            "line": 64
+        }
+    ]
+}

@@ -123,10 +123,21 @@ abstract class AbstractEngine implements EngineInterface
     {
         $options = new \Facebook\WebDriver\Chrome\ChromeOptions();
         $options->addArguments([
-            '--headless', '--disable-gpu', '--no-sandbox',
-            '--disable-dev-shm-usage', '--window-size=1920,1080',
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            '--headless=new',
+            '--disable-gpu',
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--window-size=1920,1080',
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--disable-web-security',
+            '--allow-running-insecure-content',
         ]);
+
+        // Stealth: remove webdriver detection flags
+        $options->setExperimentalOption('excludeSwitches', ['enable-automation']);
+        $options->setExperimentalOption('useAutomationExtension', false);
 
         $capabilities = \Facebook\WebDriver\Remote\DesiredCapabilities::chrome();
         $capabilities->setCapability(\Facebook\WebDriver\Chrome\ChromeOptions::CAPABILITY, $options);
@@ -148,8 +159,28 @@ abstract class AbstractEngine implements EngineInterface
         }
 
         try {
+            // Stealth: patch navigator.webdriver before page loads
+            $driver->executeScript(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+            );
+
             $driver->get($url);
-            sleep($waitSecs);
+
+            // Wait for Cloudflare challenge to resolve (up to 20s)
+            $maxCfWait = 20;
+            $waited = 0;
+            while ($waited < $maxCfWait) {
+                sleep(2);
+                $waited += 2;
+                $title = $driver->getTitle();
+                if (stripos($title, 'Just a moment') === false && stripos($title, 'Checking') === false) {
+                    break;
+                }
+            }
+
+            // Additional wait for JS rendering after CF passes
+            sleep(max(2, $waitSecs - $waited));
+
             $html = $driver->getPageSource();
             $driver->quit();
             return new Crawler($html, $url);
