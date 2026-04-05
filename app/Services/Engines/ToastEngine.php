@@ -38,9 +38,20 @@ class ToastEngine extends AbstractEngine
      */
     protected function doScrape(string $url): array
     {
-        // Toast is Cloudflare-protected — must use Selenium
-        $crawler = $this->fetchWithSelenium($url, 8);
+        // Toast uses Cloudflare Turnstile — try Selenium with stealth
+        try {
+            $crawler = $this->fetchWithSelenium($url, 8);
+        } catch (\RuntimeException $e) {
+            return $this->success([], [], $this->getBlockedMessage($url));
+        }
+
         $html = $crawler->html();
+
+        // Check if Cloudflare blocked us
+        if ($this->isCloudflareBlocked($html)) {
+            // Extract restaurant slug to suggest alternatives
+            return $this->success([], $this->extractRestaurantInfo($crawler, $url), $this->getBlockedMessage($url));
+        }
 
         // Try to extract JSON data from script tags (Toast embeds menu data)
         $items = $this->extractFromToastJson($crawler);
@@ -394,13 +405,59 @@ class ToastEngine extends AbstractEngine
     }
 
     /**
+     * Check if the page is stuck on Cloudflare challenge.
+     *
+     * @param string $html The page HTML.
+     * @return bool
+     */
+    private function isCloudflareBlocked(string $html): bool
+    {
+        $indicators = ['Just a moment...', 'Checking your browser', 'cf-browser-verification', '_cf_chl', 'challenge-platform'];
+        foreach ($indicators as $ind) {
+            if (stripos($html, $ind) !== false) {
+                return true;
+            }
+        }
+        // Also check: page has no price data at all
+        if (!preg_match('/\$\s*\d+\.\d{2}/', $html) && strlen($html) < 50000) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Get a user-friendly message when Toast blocks the scraper.
+     *
+     * @param string $url The original URL.
+     * @return string
+     */
+    private function getBlockedMessage(string $url): string
+    {
+        // Extract restaurant name from URL for search suggestions
+        $slug = '';
+        if (preg_match('/\/online\/([^\/\?]+)/', $url, $m)) {
+            $slug = str_replace('-', ' ', $m[1]);
+            $slug = preg_replace('/\d+/', '', $slug);
+            $slug = trim($slug);
+        }
+
+        $msg = 'Toast is blocking automated access (Cloudflare Turnstile). ';
+        $msg .= 'Try searching for this restaurant on DoorDash, Uber Eats, or Grubhub instead — ';
+        $msg .= 'those platforms have the same menu data without the block.';
+        if ($slug) {
+            $msg .= " Search for: \"{$slug}\"";
+        }
+        return $msg;
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function healthCheck(): array
     {
         try {
             $response = $this->http->head('https://www.toasttab.com', ['timeout' => 10]);
-            return ['healthy' => true, 'message' => 'Toast reachable'];
+            return ['healthy' => true, 'message' => 'Toast reachable (CF may block scraping)'];
         } catch (\Exception $e) {
             return ['healthy' => false, 'message' => $e->getMessage()];
         }
