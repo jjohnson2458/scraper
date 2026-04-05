@@ -100,7 +100,7 @@ class ScanController extends BaseController
     {
         $this->validateCsrf();
 
-        $url = $this->rawInput('url');
+        $url = trim($this->rawInput('url'));
         $platformSlug = $this->input('platform', 'auto');
 
         if (empty($url) || !filter_var($url, FILTER_VALIDATE_URL)) {
