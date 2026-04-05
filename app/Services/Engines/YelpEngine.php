@@ -32,15 +32,48 @@ class YelpEngine extends AbstractEngine
             return $this->success([], [], 'Site blocked the request. Try a different platform link.');
         }
 
-        $html = $crawler->html();
+        // Yelp serves full menu as JSON-LD (schema.org Menu with MenuSections)
+        $items = $this->extractJsonLd($crawler);
 
-        $items = $this->extractFromJson($html);
+        if (empty($items)) {
+            $html = $crawler->html();
+            $items = $this->extractFromJson($html);
+        }
+
         if (empty($items)) {
             $items = $this->extractFromDom($crawler);
         }
 
         $restaurant = $this->getRestaurantInfo($crawler);
         return $this->success($items, $restaurant);
+    }
+
+    /**
+     * Extract menu from JSON-LD structured data (schema.org Menu).
+     */
+    private function extractJsonLd(Crawler $crawler): array
+    {
+        $items = [];
+        try {
+            $crawler->filter('script[type="application/ld+json"]')->each(function (Crawler $script) use (&$items) {
+                $data = json_decode($script->text(), true);
+                if (!$data || ($data['@type'] ?? '') !== 'Menu') return;
+
+                foreach ($data['hasMenuSection'] ?? [] as $section) {
+                    $category = $section['name'] ?? null;
+                    foreach ($section['hasMenuItem'] ?? [] as $mi) {
+                        $price = isset($mi['offers']['price']) ? (float) $mi['offers']['price'] : null;
+                        $items[] = $this->makeItem(
+                            $mi['name'] ?? 'Unknown',
+                            $price,
+                            $mi['description'] ?? null,
+                            $category
+                        );
+                    }
+                }
+            });
+        } catch (\Exception $e) {}
+        return $items;
     }
 
     private function extractFromJson(string $html): array

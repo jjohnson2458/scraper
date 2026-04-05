@@ -179,12 +179,168 @@ class GenericEngine extends AbstractEngine
     }
 
     /**
-     * Extract items from DOM using heuristic selectors.
+     * Extract items from DOM using smart heuristics.
+     *
+     * Strategy: find repeating containers where each has BOTH a name
+     * (heading or strong) AND a price. Skip nav/header/footer content.
      *
      * @param Crawler $crawler The DOM crawler.
      * @return array
      */
     private function extractFromDom(Crawler $crawler): array
+    {
+        // Strategy 1: figure/figcaption pattern (WordPress food themes like Franco's)
+        $items = $this->extractFigcaptionItems($crawler);
+        if (!empty($items)) return $items;
+
+        // Strategy 2: Find repeating containers with name+price pairs
+        $items = $this->extractRepeatingContainers($crawler);
+        if (!empty($items)) return $items;
+
+        // Strategy 3: Original heuristic selector scan (fallback)
+        $items = $this->extractBySelectorScoring($crawler);
+        if (!empty($items)) return $items;
+
+        // Fallback: scan for price patterns in body text
+        if (empty($items)) {
+            $items = $this->extractByPricePatterns($crawler);
+        }
+
+        return $items;
+    }
+
+    /**
+     * Strategy 1: Extract from figure/figcaption pattern.
+     * Common in WordPress food themes (e.g., Franco's Pizza).
+     * Pattern: figure > figcaption > h3 (name) + h5/span (price) + p (desc)
+     *
+     * @param Crawler $crawler The DOM crawler.
+     * @return array
+     */
+    private function extractFigcaptionItems(Crawler $crawler): array
+    {
+        $items = [];
+        try {
+            $crawler->filter('figure figcaption, .exbt-item, [class*="food-item"], [class*="menu-card"]')->each(function (Crawler $node) use (&$items) {
+                $name = null;
+                $price = null;
+                $description = null;
+                $imageUrl = null;
+
+                // Name from heading
+                foreach (['h3 a', 'h3', 'h4 a', 'h4', 'h2 a', 'h2'] as $sel) {
+                    try { $n = $node->filter($sel)->first(); if ($n->count()) { $name = trim($n->text()); break; } } catch (\Exception $e) { continue; }
+                }
+
+                // Price from h5/span or any element with $ sign
+                foreach (['h5 span', 'h5', '.price', 'span'] as $sel) {
+                    try {
+                        $n = $node->filter($sel)->first();
+                        if ($n->count()) {
+                            $p = $this->extractPrice($n->text());
+                            if ($p) { $price = $p; break; }
+                        }
+                    } catch (\Exception $e) { continue; }
+                }
+
+                // Description from p tag
+                try { $d = $node->filter('p')->first(); if ($d->count()) $description = trim($d->text()); } catch (\Exception $e) {}
+
+                // Image from parent figure
+                try {
+                    $figure = $node->closest('figure') ?: $node;
+                    $img = $figure->filter('img')->first();
+                    if ($img->count()) $imageUrl = $img->attr('src') ?: $img->attr('data-src') ?: $img->attr('nitro-lazy-src');
+                } catch (\Exception $e) {}
+
+                if ($name && strlen($name) >= 2 && $price) {
+                    $items[] = $this->makeItem($name, $price, $description, null, $imageUrl);
+                }
+            });
+        } catch (\Exception $e) {}
+        return $items;
+    }
+
+    /**
+     * Strategy 2: Find repeating container elements that each contain
+     * both a heading (name) and a price. Much smarter than the old
+     * approach of picking a single CSS selector.
+     *
+     * @param Crawler $crawler The DOM crawler.
+     * @return array
+     */
+    private function extractRepeatingContainers(Crawler $crawler): array
+    {
+        $items = [];
+
+        // Candidate container selectors — from specific to general
+        $containerSelectors = [
+            'figure', '.product-card', '.menu-item-card', '[class*="food-card"]',
+            '.card', 'article', '.item', '.dish', '.entry',
+            'li[class*="menu"]', 'li[class*="item"]', 'li[class*="product"]',
+            'div[class*="menu-item"]', 'div[class*="food-item"]', 'div[class*="product"]',
+        ];
+
+        foreach ($containerSelectors as $selector) {
+            try {
+                $nodes = $crawler->filter($selector);
+                if ($nodes->count() < 2 || $nodes->count() > 150) continue;
+
+                $foundItems = [];
+                $priceHits = 0;
+
+                $nodes->each(function (Crawler $node) use (&$foundItems, &$priceHits) {
+                    $text = trim($node->text());
+                    // Skip nav-like elements (short text, no prices)
+                    if (strlen($text) < 5 || strlen($text) > 2000) return;
+
+                    $price = $this->extractPrice($text);
+                    if (!$price) return;
+                    $priceHits++;
+
+                    $name = null;
+                    foreach (['h2','h3','h4','h5','strong','.name','.title','a'] as $sel) {
+                        try {
+                            $n = $node->filter($sel)->first();
+                            if ($n->count()) {
+                                $candidate = trim($n->text());
+                                // Skip if it's just the price or too short
+                                if (strlen($candidate) >= 2 && strlen($candidate) < 150 && !preg_match('/^\$?\d+\.?\d*\+?$/', $candidate)) {
+                                    $name = $candidate;
+                                    break;
+                                }
+                            }
+                        } catch (\Exception $e) { continue; }
+                    }
+
+                    if (!$name) return;
+
+                    $description = null;
+                    try { $d = $node->filter('p, .description, [class*="desc"]')->first(); if ($d->count()) { $t = trim($d->text()); if ($t !== $name && strlen($t) > 5) $description = $t; } } catch (\Exception $e) {}
+
+                    $imageUrl = null;
+                    try { $img = $node->filter('img')->first(); if ($img->count()) $imageUrl = $img->attr('src') ?: $img->attr('data-src'); } catch (\Exception $e) {}
+
+                    $foundItems[] = $this->makeItem($name, $price, $description, null, $imageUrl);
+                });
+
+                // If more than half the containers had prices, this is likely the menu
+                if ($priceHits >= 2 && count($foundItems) >= 2) {
+                    return $foundItems;
+                }
+            } catch (\Exception $e) { continue; }
+        }
+
+        return $items;
+    }
+
+    /**
+     * Strategy 3: Original scored selector approach (legacy fallback).
+     *
+     * @param Crawler $crawler The DOM crawler.
+     * @return array
+     */
+    private function extractBySelectorScoring(Crawler $crawler): array
     {
         $items = [];
         $bestSelector = null;
@@ -198,9 +354,7 @@ class GenericEngine extends AbstractEngine
 
                 $priceCount = 0;
                 $nodes->each(function (Crawler $node) use (&$priceCount) {
-                    if ($this->extractPrice($node->text())) {
-                        $priceCount++;
-                    }
+                    if ($this->extractPrice($node->text())) $priceCount++;
                 });
 
                 $score = $priceCount * 2 + $count;
@@ -208,9 +362,7 @@ class GenericEngine extends AbstractEngine
                     $maxScore = $score;
                     $bestSelector = $selector;
                 }
-            } catch (\Exception $e) {
-                continue;
-            }
+            } catch (\Exception $e) { continue; }
         }
 
         if ($bestSelector) {
@@ -220,11 +372,6 @@ class GenericEngine extends AbstractEngine
                     if ($item) $items[] = $item;
                 });
             } catch (\Exception $e) {}
-        }
-
-        // Fallback: scan for price patterns in body text
-        if (empty($items)) {
-            $items = $this->extractByPricePatterns($crawler);
         }
 
         return $items;
