@@ -159,19 +159,24 @@ abstract class AbstractEngine implements EngineInterface
         }
 
         try {
-            // Stealth: patch navigator.webdriver before page loads
-            $driver->executeScript(
-                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
-            );
+            // Navigate to a blank page first to inject stealth script
+            $driver->get('about:blank');
+            try {
+                $driver->executeScript(
+                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+                );
+            } catch (\Exception $e) {
+                // Some drivers don't support this — continue anyway
+            }
 
             $driver->get($url);
 
-            // Wait for Cloudflare challenge to resolve (up to 20s)
-            $maxCfWait = 20;
+            // Wait for Cloudflare challenge to resolve (up to 30s)
+            $maxCfWait = 30;
             $waited = 0;
             while ($waited < $maxCfWait) {
-                sleep(2);
-                $waited += 2;
+                sleep(3);
+                $waited += 3;
                 $title = $driver->getTitle();
                 if (stripos($title, 'Just a moment') === false && stripos($title, 'Checking') === false) {
                     break;
@@ -179,7 +184,7 @@ abstract class AbstractEngine implements EngineInterface
             }
 
             // Additional wait for JS rendering after CF passes
-            sleep(max(2, $waitSecs - $waited));
+            sleep(max(3, $waitSecs));
 
             $html = $driver->getPageSource();
             $driver->quit();
