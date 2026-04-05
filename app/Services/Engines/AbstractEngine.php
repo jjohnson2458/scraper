@@ -198,24 +198,34 @@ abstract class AbstractEngine implements EngineInterface
     }
 
     /**
-     * Take a full-page screenshot via Selenium, run OCR, and return parsed items.
+     * Scrape via screenshot + OCR: open Chrome, wait for render, take
+     * sectioned screenshots of just the menu content, crop out nav/chrome,
+     * OCR each section, quit Chrome fast.
      *
-     * This is the universal fallback — works on any site regardless of
-     * DOM structure, JS framework, or bot protection. As long as the page
-     * renders visually, we can extract the menu.
+     * Safe for 1GB servers — single Chrome session, ~15s, then exits.
      *
-     * @param string $url      The URL to screenshot.
-     * @param int    $waitSecs Seconds to wait for rendering.
-     * @return array{success: bool, items: array, restaurant: array, error: string|null}
+     * @param string $url The URL to screenshot.
+     * @return array
      */
-    protected function scrapeViaScreenshot(string $url, int $waitSecs = 10): array
+    protected function scrapeViaScreenshot(string $url): array
     {
         $driver = null;
+        $screenshots = [];
+        $screenshotDir = sys_get_temp_dir() . '/scraper_screenshots';
+
         try {
+            if (!is_dir($screenshotDir)) {
+                mkdir($screenshotDir, 0755, true);
+            }
+
+            // Launch Chrome — minimal memory footprint
             $options = new \Facebook\WebDriver\Chrome\ChromeOptions();
             $options->addArguments([
                 '--headless=new', '--disable-gpu', '--no-sandbox',
-                '--disable-dev-shm-usage', '--window-size=1920,4000',
+                '--disable-dev-shm-usage',
+                '--window-size=1280,900',
+                '--disable-extensions', '--disable-plugins',
+                '--disable-images',  // Don't load images to save memory
                 '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 '--disable-blink-features=AutomationControlled',
             ]);
@@ -225,10 +235,10 @@ abstract class AbstractEngine implements EngineInterface
             $capabilities = \Facebook\WebDriver\Remote\DesiredCapabilities::chrome();
             $capabilities->setCapability(\Facebook\WebDriver\Chrome\ChromeOptions::CAPABILITY, $options);
 
-            $seleniumUrls = ['http://localhost:4444/wd/hub', 'http://localhost:4444', 'http://localhost:9515'];
+            $seleniumUrls = ['http://localhost:9515', 'http://localhost:4444/wd/hub', 'http://localhost:4444'];
             foreach ($seleniumUrls as $seleniumUrl) {
                 try {
-                    $driver = \Facebook\WebDriver\Remote\RemoteWebDriver::create($seleniumUrl, $capabilities, 60000, 60000);
+                    $driver = \Facebook\WebDriver\Remote\RemoteWebDriver::create($seleniumUrl, $capabilities, 30000, 30000);
                     break;
                 } catch (\Exception $e) {
                     continue;
@@ -236,50 +246,35 @@ abstract class AbstractEngine implements EngineInterface
             }
 
             if (!$driver) {
-                return $this->success([], [], 'Selenium WebDriver is not running.');
+                return $this->success([], [], 'ChromeDriver is not running. Start it with: sudo systemctl start chromedriver');
             }
 
-            // Navigate
+            // Stealth + navigate
             $driver->get('about:blank');
             try { $driver->executeScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"); } catch (\Exception $e) {}
             $driver->get($url);
 
-            // Wait for CF + rendering
-            $maxWait = 30;
-            $waited = 0;
-            while ($waited < $maxWait) {
+            // Wait for Cloudflare (max 20s)
+            for ($i = 0; $i < 7; $i++) {
                 sleep(3);
-                $waited += 3;
                 $title = $driver->getTitle();
                 if (stripos($title, 'Just a moment') === false && stripos($title, 'Checking') === false) {
                     break;
                 }
             }
-            sleep($waitSecs);
 
-            // Scroll down to load lazy content
-            $driver->executeScript('window.scrollTo(0, document.body.scrollHeight / 3);');
-            sleep(2);
-            $driver->executeScript('window.scrollTo(0, document.body.scrollHeight * 2 / 3);');
-            sleep(2);
-            $driver->executeScript('window.scrollTo(0, document.body.scrollHeight);');
-            sleep(2);
-            $driver->executeScript('window.scrollTo(0, 0);');
-            sleep(1);
-
-            // Get restaurant name from title
-            $pageTitle = $driver->getTitle();
-            $restaurantName = $pageTitle && $pageTitle !== 'Just a moment...' ? $pageTitle : null;
-
-            // Take screenshot
-            $screenshotDir = sys_get_temp_dir() . '/scraper_screenshots';
-            if (!is_dir($screenshotDir)) {
-                mkdir($screenshotDir, 0755, true);
+            // Check if CF still blocking
+            $title = $driver->getTitle();
+            if (stripos($title, 'Just a moment') !== false) {
+                $driver->quit();
+                return $this->success([], [], 'Cloudflare challenge could not be cleared. Try a photo of the menu instead.');
             }
-            $screenshotPath = $screenshotDir . '/scan_' . uniqid() . '.png';
-            $driver->takeScreenshot($screenshotPath);
 
-            // Also grab og:image for banner before quitting
+            // Wait for JS rendering
+            sleep(5);
+
+            // Get restaurant name + banner
+            $restaurantName = $title && strlen($title) > 2 ? $title : null;
             $bannerUrl = null;
             try {
                 $html = $driver->getPageSource();
@@ -288,40 +283,161 @@ abstract class AbstractEngine implements EngineInterface
                 }
             } catch (\Exception $e) {}
 
+            // Dismiss cookie banners / overlays
+            try {
+                $driver->executeScript("
+                    document.querySelectorAll('[class*=\"cookie\"], [class*=\"Cookie\"], [class*=\"consent\"], [id*=\"cookie\"], [class*=\"overlay\"], [class*=\"modal\"], [class*=\"banner\"]').forEach(el => {
+                        if (el.offsetHeight > 0 && el.offsetHeight < 300) el.remove();
+                    });
+                    document.querySelectorAll('nav, header, [class*=\"nav\"], [class*=\"header\"], [role=\"navigation\"]').forEach(el => el.remove());
+                    document.querySelectorAll('footer, [class*=\"footer\"], [role=\"contentinfo\"]').forEach(el => el.remove());
+                ");
+            } catch (\Exception $e) {}
+
+            sleep(1);
+
+            // Get page dimensions
+            $totalHeight = (int) $driver->executeScript('return document.body.scrollHeight;');
+            $viewportHeight = 900;
+            $scrollPos = 0;
+            $section = 0;
+
+            // Scroll and screenshot in sections
+            while ($scrollPos < $totalHeight && $section < 15) {
+                $driver->executeScript("window.scrollTo(0, {$scrollPos});");
+                usleep(500000); // 0.5s between screenshots
+
+                $path = $screenshotDir . '/section_' . uniqid() . '_' . $section . '.png';
+                $driver->takeScreenshot($path);
+
+                if (file_exists($path) && filesize($path) > 1000) {
+                    $screenshots[] = $path;
+                }
+
+                $scrollPos += (int)($viewportHeight * 0.85); // 15% overlap
+                $section++;
+            }
+
+            // DONE with Chrome — quit immediately
             $driver->quit();
             $driver = null;
 
-            if (!file_exists($screenshotPath) || filesize($screenshotPath) < 1000) {
-                return $this->success([], [], 'Screenshot capture failed.');
+            if (empty($screenshots)) {
+                return $this->success([], [], 'No screenshots captured.');
             }
 
-            // OCR the screenshot
+            // Crop each screenshot: remove top 10% and bottom 10% (nav/footer remnants)
+            // and left/right 5% (sidebars)
+            $croppedPaths = [];
+            foreach ($screenshots as $ssPath) {
+                $cropped = $this->cropScreenshot($ssPath);
+                if ($cropped) {
+                    $croppedPaths[] = $cropped;
+                }
+                @unlink($ssPath); // Clean original
+            }
+
+            // OCR each cropped section and merge results
+            $allItems = [];
             $ocrService = new \App\Services\OcrService();
-            $ocrResult = $ocrService->processImage($screenshotPath);
 
-            // Clean up screenshot
-            @unlink($screenshotPath);
-
-            if (!$ocrResult['success'] || empty($ocrResult['items'])) {
-                return $this->success(
-                    [],
-                    ['name' => $restaurantName, 'banner_url' => $bannerUrl, 'address' => null, 'phone' => null, 'logo_url' => null],
-                    $ocrResult['error'] ?? 'OCR could not extract menu items from the page screenshot.'
-                );
+            foreach ($croppedPaths as $cropPath) {
+                $ocrResult = $ocrService->processImage($cropPath);
+                if ($ocrResult['success'] && !empty($ocrResult['items'])) {
+                    $allItems = array_merge($allItems, $ocrResult['items']);
+                }
+                @unlink($cropPath); // Clean cropped
             }
 
-            return $this->success(
-                $ocrResult['items'],
-                ['name' => $restaurantName, 'banner_url' => $bannerUrl, 'address' => null, 'phone' => null, 'logo_url' => null]
-            );
+            // Deduplicate by name+price
+            $allItems = $this->deduplicateItems($allItems);
+
+            $restaurant = [
+                'name' => $restaurantName,
+                'banner_url' => $bannerUrl,
+                'address' => null,
+                'phone' => null,
+                'logo_url' => null,
+            ];
+
+            if (empty($allItems)) {
+                return $this->success([], $restaurant, 'Screenshots captured but OCR could not extract menu items. Try taking a photo of the physical menu instead.');
+            }
+
+            return $this->success($allItems, $restaurant);
 
         } catch (\Exception $e) {
             if ($driver) {
                 try { $driver->quit(); } catch (\Exception $ignored) {}
             }
+            // Clean up any screenshots
+            foreach ($screenshots as $ss) { @unlink($ss); }
             $this->errorLog->log('Screenshot scrape failed: ' . $e->getMessage(), 'error', ['url' => $url]);
             return $this->success([], [], 'Screenshot scrape failed: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Crop a screenshot to remove nav bars, footers, and sidebars.
+     * Keeps the center 90% vertically and 90% horizontally.
+     *
+     * @param string $path Path to the screenshot PNG.
+     * @return string|null Path to the cropped image, or null on failure.
+     */
+    protected function cropScreenshot(string $path): ?string
+    {
+        try {
+            $img = imagecreatefrompng($path);
+            if (!$img) return null;
+
+            $width = imagesx($img);
+            $height = imagesy($img);
+
+            // Crop: remove top 8%, bottom 8%, left 5%, right 5%
+            $cropX = (int)($width * 0.05);
+            $cropY = (int)($height * 0.08);
+            $cropW = (int)($width * 0.90);
+            $cropH = (int)($height * 0.84);
+
+            $cropped = imagecrop($img, [
+                'x' => $cropX,
+                'y' => $cropY,
+                'width' => $cropW,
+                'height' => $cropH,
+            ]);
+
+            imagedestroy($img);
+
+            if (!$cropped) return null;
+
+            $croppedPath = str_replace('.png', '_cropped.png', $path);
+            imagepng($cropped, $croppedPath);
+            imagedestroy($cropped);
+
+            return $croppedPath;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Deduplicate items by name+price.
+     *
+     * @param array $items The items to deduplicate.
+     * @return array
+     */
+    protected function deduplicateItems(array $items): array
+    {
+        $seen = [];
+        $unique = [];
+        foreach ($items as $item) {
+            $key = strtolower(trim($item['name'] ?? '')) . '|' . ($item['price'] ?? '');
+            if (!isset($seen[$key])) {
+                $seen[$key] = true;
+                $unique[] = $item;
+            }
+        }
+        return $unique;
     }
 
     /**

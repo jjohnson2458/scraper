@@ -57,14 +57,9 @@ class ToastEngine extends AbstractEngine
             // Expected — CF blocks Guzzle
         }
 
-        // Toast is behind Cloudflare Turnstile which blocks automated browsers
-        // on this server. Direct user to a delivery platform that has the same menu.
-        return $this->success([], [], $this->getBlockedMessage($url));
-
-        // Extract restaurant info
-        $restaurant = $this->extractRestaurantInfo($crawler, $url);
-
-        return $this->success($items, $restaurant);
+        // Guzzle failed (expected for Toast) — use screenshot+OCR approach
+        // Quick Chrome session: render page, screenshot menu sections, crop, OCR, quit
+        return $this->scrapeViaScreenshot($url);
     }
 
     /**
