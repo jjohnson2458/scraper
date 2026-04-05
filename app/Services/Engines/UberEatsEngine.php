@@ -40,18 +40,21 @@ class UberEatsEngine extends AbstractEngine
      */
     protected function doScrape(string $url): array
     {
-        $crawler = $this->fetchWithSelenium($url, 6);
-        $html = $crawler->html();
-
-        $items = $this->extractFromHydrationState($html);
-
-        if (empty($items)) {
-            $items = $this->extractFromDom($crawler);
+        // Try Guzzle first — Uber Eats sometimes includes hydration data in raw HTML
+        try {
+            $response = $this->http->get($url);
+            $html = (string) $response->getBody();
+            $items = $this->extractFromHydrationState($html);
+            if (!empty($items)) {
+                $crawler = new \Symfony\Component\DomCrawler\Crawler($html, $url);
+                $restaurant = $this->extractRestaurantInfo($crawler);
+                return $this->success($items, $restaurant);
+            }
+        } catch (\Exception $e) {
+            // Blocked — fall through
         }
 
-        $restaurant = $this->extractRestaurantInfo($crawler);
-
-        return $this->success($items, $restaurant);
+        return $this->success([], [], 'Uber Eats blocked the request. Try using the DoorDash or Grubhub link for this restaurant instead.');
     }
 
     /**

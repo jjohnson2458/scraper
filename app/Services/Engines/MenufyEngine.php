@@ -25,7 +25,7 @@ class MenufyEngine extends AbstractEngine
         try {
             $crawler = $this->fetchDom($url);
         } catch (\Exception $e) {
-            $crawler = $this->fetchWithSelenium($url, 5);
+            return $this->success([], [], 'Site blocked the request. Try a different platform link.');
         }
 
         $items = $this->extractFromDom($crawler);

@@ -55,55 +55,20 @@ class GenericEngine extends AbstractEngine
      */
     protected function doScrape(string $url): array
     {
-        // Try direct HTTP first
+        // Guzzle only — no Selenium on production (1GB RAM limit)
         try {
             $response = $this->http->get($url);
             $html = (string) $response->getBody();
 
             if ($this->isBotProtected($html)) {
-                return $this->scrapeWithBrowser($url);
+                return $this->success([], [], 'This site has bot protection (Cloudflare). Try finding this restaurant on DoorDash, Grubhub, or Yelp instead.');
             }
 
             return $this->parseHtml($html, $url);
         } catch (\GuzzleHttp\Exception\ClientException $e) {
             $code = $e->getResponse()->getStatusCode();
-            if (in_array($code, [403, 503])) {
-                return $this->scrapeWithBrowser($url);
-            }
-            throw $e;
+            return $this->success([], [], "Site returned HTTP {$code}. The site may be blocking automated access. Try a different platform link for this restaurant.");
         }
-    }
-
-    /**
-     * Scrape using Selenium as a fallback.
-     *
-     * @param string $url The URL to scrape.
-     * @return array
-     */
-    private function scrapeWithBrowser(string $url): array
-    {
-        $crawler = $this->fetchWithSelenium($url, 5);
-        $html = $crawler->html();
-
-        if ($this->isBotProtected($html)) {
-            // Wait longer and try again
-            $crawler = $this->fetchWithSelenium($url, 15);
-            $html = $crawler->html();
-        }
-
-        if ($this->isBotProtected($html)) {
-            // Bot protection won't clear — try screenshot+OCR
-            return $this->scrapeViaScreenshot($url, 8);
-        }
-
-        $result = $this->parseHtml($html, $url);
-
-        // If DOM parsing found nothing, try screenshot+OCR
-        if (empty($result['items'])) {
-            return $this->scrapeViaScreenshot($url, 5);
-        }
-
-        return $result;
     }
 
     /**

@@ -38,7 +38,7 @@ class DoorDashEngine extends AbstractEngine
      */
     protected function doScrape(string $url): array
     {
-        // Try Guzzle first — DoorDash sometimes serves __NEXT_DATA__ without JS
+        // Try Guzzle first — DoorDash often has __NEXT_DATA__ in raw HTML
         try {
             $response = $this->http->get($url);
             $html = (string) $response->getBody();
@@ -49,29 +49,10 @@ class DoorDashEngine extends AbstractEngine
                 return $this->success($items, $restaurant);
             }
         } catch (\Exception $e) {
-            // Blocked or error — continue to Selenium
+            // Blocked — fall through
         }
 
-        // Try Selenium for full JS rendering
-        try {
-            $crawler = $this->fetchWithSelenium($url, 6);
-            $html = $crawler->html();
-
-            $items = $this->extractFromNextData($html);
-            if (empty($items)) {
-                $items = $this->extractFromDom($crawler);
-            }
-
-            if (!empty($items)) {
-                $restaurant = $this->extractRestaurantInfo($crawler);
-                return $this->success($items, $restaurant);
-            }
-        } catch (\Exception $e) {
-            // Selenium failed — fall through to screenshot
-        }
-
-        // Last resort: screenshot + OCR
-        return $this->scrapeViaScreenshot($url, 8);
+        return $this->success([], [], 'DoorDash blocked the request. This site requires JavaScript rendering which is not available on this server. Try using the Grubhub or Yelp link for this restaurant instead.');
     }
 
     /**

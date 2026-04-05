@@ -38,28 +38,35 @@ class GrubhubEngine extends AbstractEngine
      */
     protected function doScrape(string $url): array
     {
-        // Try to extract restaurant ID from URL and hit the API
+        // Try to extract restaurant ID from URL and hit the API (no browser needed)
         $restaurantId = $this->extractRestaurantId($url);
         if ($restaurantId) {
             $items = $this->fetchFromApi($restaurantId);
             if (!empty($items)) {
-                $crawler = $this->fetchWithSelenium($url, 4);
-                $restaurant = $this->extractRestaurantInfo($crawler);
+                // Get restaurant info from raw HTML (no Selenium)
+                $restaurant = ['name' => null, 'address' => null, 'phone' => null, 'logo_url' => null, 'banner_url' => null];
+                try {
+                    $response = $this->http->get($url);
+                    $crawler = new \Symfony\Component\DomCrawler\Crawler((string) $response->getBody(), $url);
+                    $restaurant = $this->extractRestaurantInfo($crawler);
+                } catch (\Exception $e) {}
                 return $this->success($items, $restaurant);
             }
         }
 
-        // Fallback to Selenium + DOM
-        $crawler = $this->fetchWithSelenium($url, 6);
-        $html = $crawler->html();
+        // Try Guzzle for page JSON
+        try {
+            $response = $this->http->get($url);
+            $html = (string) $response->getBody();
+            $items = $this->extractFromPageJson($html);
+            if (!empty($items)) {
+                $crawler = new \Symfony\Component\DomCrawler\Crawler($html, $url);
+                $restaurant = $this->extractRestaurantInfo($crawler);
+                return $this->success($items, $restaurant);
+            }
+        } catch (\Exception $e) {}
 
-        $items = $this->extractFromPageJson($html);
-        if (empty($items)) {
-            $items = $this->extractFromDom($crawler);
-        }
-
-        $restaurant = $this->extractRestaurantInfo($crawler);
-        return $this->success($items, $restaurant);
+        return $this->success([], [], 'Grubhub blocked the request or no menu data found. Try using the DoorDash or Yelp link for this restaurant instead.');
     }
 
     /**

@@ -18,7 +18,7 @@ class NineFoldEngine extends AbstractEngine
 
     protected function doScrape(string $url): array
     {
-        try { $crawler = $this->fetchDom($url); } catch (\Exception $e) { $crawler = $this->fetchWithSelenium($url, 5); }
+        try { $crawler = $this->fetchDom($url); } catch (\Exception $e) { return $this->success([], [], "Site blocked the request. Try a different platform link for this restaurant."); }
         $items = $this->extractFromDom($crawler);
         return $this->success($items, $this->getInfo($crawler));
     }

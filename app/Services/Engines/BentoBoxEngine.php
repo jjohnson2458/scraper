@@ -29,7 +29,7 @@ class BentoBoxEngine extends AbstractEngine
         try {
             $crawler = $this->fetchDom($url);
         } catch (\Exception $e) {
-            $crawler = $this->fetchWithSelenium($url, 5);
+            return $this->success([], [], 'Site blocked the request. Try a different platform link.');
         }
 
         // BentoBox often uses JSON-LD structured data

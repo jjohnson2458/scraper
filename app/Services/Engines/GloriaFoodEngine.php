@@ -18,7 +18,12 @@ class GloriaFoodEngine extends AbstractEngine
 
     protected function doScrape(string $url): array
     {
-        $crawler = $this->fetchWithSelenium($url, 6);
+        try {
+            $crawler = $this->fetchDom($url);
+        } catch (\Exception $e) {
+            return $this->success([], [], 'Site blocked the request. Try a different platform link.');
+        }
+
         $html = $crawler->html();
         $items = $this->extractFromJson($html);
         if (empty($items)) $items = $this->extractFromDom($crawler);

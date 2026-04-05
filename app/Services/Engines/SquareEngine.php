@@ -52,20 +52,8 @@ class SquareEngine extends AbstractEngine
                 return $this->success($items, $restaurant);
             }
         } catch (\Exception $e) {
-            // Fall through to Selenium
+            return $this->success([], [], 'Site blocked the request. Try a different platform link.');
         }
-
-        // Selenium fallback
-        $crawler = $this->fetchWithSelenium($url, 5);
-        $html = $crawler->html();
-
-        $items = $this->extractFromSquareJson($html);
-        if (empty($items)) {
-            $items = $this->extractFromDom($crawler);
-        }
-
-        $restaurant = $this->extractRestaurantInfo($crawler);
-        return $this->success($items, $restaurant);
     }
 
     /**

@@ -38,33 +38,28 @@ class ToastEngine extends AbstractEngine
      */
     protected function doScrape(string $url): array
     {
-        // Toast uses Cloudflare Turnstile — try Selenium with stealth
+        // Try Guzzle first (won't work with CF but costs nothing to try)
         try {
-            $crawler = $this->fetchWithSelenium($url, 8);
-        } catch (\RuntimeException $e) {
-            // Selenium not available — try screenshot+OCR
-            return $this->scrapeViaScreenshot($url, 8);
+            $response = $this->http->get($url);
+            $html = (string) $response->getBody();
+            if (!$this->isCloudflareBlocked($html)) {
+                $crawler = new \Symfony\Component\DomCrawler\Crawler($html, $url);
+                $items = $this->extractFromToastJson($crawler);
+                if (empty($items)) {
+                    $items = $this->extractFromToastDom($crawler);
+                }
+                if (!empty($items)) {
+                    $restaurant = $this->extractRestaurantInfo($crawler, $url);
+                    return $this->success($items, $restaurant);
+                }
+            }
+        } catch (\Exception $e) {
+            // Expected — CF blocks Guzzle
         }
 
-        $html = $crawler->html();
-
-        // Check if Cloudflare blocked us — fall back to screenshot+OCR
-        if ($this->isCloudflareBlocked($html)) {
-            return $this->scrapeViaScreenshot($url, 8);
-        }
-
-        // Try to extract JSON data from script tags (Toast embeds menu data)
-        $items = $this->extractFromToastJson($crawler);
-
-        // Fall back to DOM parsing
-        if (empty($items)) {
-            $items = $this->extractFromToastDom($crawler);
-        }
-
-        // If still nothing, try screenshot+OCR as last resort
-        if (empty($items)) {
-            return $this->scrapeViaScreenshot($url, 5);
-        }
+        // Toast is behind Cloudflare Turnstile which blocks automated browsers
+        // on this server. Direct user to a delivery platform that has the same menu.
+        return $this->success([], [], $this->getBlockedMessage($url));
 
         // Extract restaurant info
         $restaurant = $this->extractRestaurantInfo($crawler, $url);

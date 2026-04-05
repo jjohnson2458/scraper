@@ -26,7 +26,12 @@ class YelpEngine extends AbstractEngine
             $url = rtrim($url, '/') . '/menu';
         }
 
-        $crawler = $this->fetchWithSelenium($url, 5);
+        try {
+            $crawler = $this->fetchDom($url);
+        } catch (\Exception $e) {
+            return $this->success([], [], 'Site blocked the request. Try a different platform link.');
+        }
+
         $html = $crawler->html();
 
         $items = $this->extractFromJson($html);

@@ -18,8 +18,12 @@ class TripAdvisorEngine extends AbstractEngine
 
     protected function doScrape(string $url): array
     {
-        $crawler = $this->fetchWithSelenium($url, 6);
-        $html = $crawler->html();
+        try {
+            $crawler = $this->fetchDom($url);
+        } catch (\Exception $e) {
+            return $this->success([], [], 'Site blocked the request. Try a different platform link.');
+        }
+
         $items = $this->extractJsonLd($crawler);
         if (empty($items)) $items = $this->extractFromDom($crawler);
         return $this->success($items, $this->getInfo($crawler));

@@ -28,8 +28,7 @@ class CloverEngine extends AbstractEngine
             $crawler = $this->fetchDom($url);
             $html = $crawler->html();
         } catch (\Exception $e) {
-            $crawler = $this->fetchWithSelenium($url, 5);
-            $html = $crawler->html();
+            return $this->success([], [], 'Site blocked the request. Try a different platform link.');
         }
 
         $items = $this->extractFromJson($html);

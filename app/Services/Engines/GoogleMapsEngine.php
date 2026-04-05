@@ -21,8 +21,13 @@ class GoogleMapsEngine extends AbstractEngine
 
     protected function doScrape(string $url): array
     {
-        // Google Maps is heavily JS-rendered
-        $crawler = $this->fetchWithSelenium($url, 8);
+        // Google Maps is heavily JS-rendered; Guzzle may not get full data
+        try {
+            $crawler = $this->fetchDom($url);
+        } catch (\Exception $e) {
+            return $this->success([], [], 'Site blocked the request. Try a different platform link.');
+        }
+
         $html = $crawler->html();
 
         $items = $this->extractFromJson($html);

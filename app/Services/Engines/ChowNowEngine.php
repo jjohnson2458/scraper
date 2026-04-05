@@ -58,14 +58,7 @@ class ChowNowEngine extends AbstractEngine
             $restaurant = $this->extractRestaurantInfo($crawler);
             return $this->success($items, $restaurant);
         } catch (\Exception $e) {
-            // If blocked, try Selenium
-            $crawler = $this->fetchWithSelenium($url, 5);
-            $items = $this->extractFromPageJson($crawler->html());
-            if (empty($items)) {
-                $items = $this->extractFromDom($crawler);
-            }
-            $restaurant = $this->extractRestaurantInfo($crawler);
-            return $this->success($items, $restaurant);
+            return $this->success([], [], 'Site blocked the request. Try a different platform link.');
         }
     }
 
