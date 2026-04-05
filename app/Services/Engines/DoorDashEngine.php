@@ -38,20 +38,40 @@ class DoorDashEngine extends AbstractEngine
      */
     protected function doScrape(string $url): array
     {
-        // DoorDash is JS-heavy — use Selenium
-        $crawler = $this->fetchWithSelenium($url, 6);
-        $html = $crawler->html();
-
-        // Try to extract JSON data from __NEXT_DATA__ or inline scripts
-        $items = $this->extractFromNextData($html);
-
-        if (empty($items)) {
-            $items = $this->extractFromDom($crawler);
+        // Try Guzzle first — DoorDash sometimes serves __NEXT_DATA__ without JS
+        try {
+            $response = $this->http->get($url);
+            $html = (string) $response->getBody();
+            $items = $this->extractFromNextData($html);
+            if (!empty($items)) {
+                $crawler = new \Symfony\Component\DomCrawler\Crawler($html, $url);
+                $restaurant = $this->extractRestaurantInfo($crawler);
+                return $this->success($items, $restaurant);
+            }
+        } catch (\Exception $e) {
+            // Blocked or error — continue to Selenium
         }
 
-        $restaurant = $this->extractRestaurantInfo($crawler);
+        // Try Selenium for full JS rendering
+        try {
+            $crawler = $this->fetchWithSelenium($url, 6);
+            $html = $crawler->html();
 
-        return $this->success($items, $restaurant);
+            $items = $this->extractFromNextData($html);
+            if (empty($items)) {
+                $items = $this->extractFromDom($crawler);
+            }
+
+            if (!empty($items)) {
+                $restaurant = $this->extractRestaurantInfo($crawler);
+                return $this->success($items, $restaurant);
+            }
+        } catch (\Exception $e) {
+            // Selenium failed — fall through to screenshot
+        }
+
+        // Last resort: screenshot + OCR
+        return $this->scrapeViaScreenshot($url, 8);
     }
 
     /**

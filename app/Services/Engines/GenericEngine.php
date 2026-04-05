@@ -92,10 +92,18 @@ class GenericEngine extends AbstractEngine
         }
 
         if ($this->isBotProtected($html)) {
-            return $this->success([], [], 'Bot protection could not be bypassed. Try taking a photo of the menu instead.');
+            // Bot protection won't clear — try screenshot+OCR
+            return $this->scrapeViaScreenshot($url, 8);
         }
 
-        return $this->parseHtml($html, $url);
+        $result = $this->parseHtml($html, $url);
+
+        // If DOM parsing found nothing, try screenshot+OCR
+        if (empty($result['items'])) {
+            return $this->scrapeViaScreenshot($url, 5);
+        }
+
+        return $result;
     }
 
     /**

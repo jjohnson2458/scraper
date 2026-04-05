@@ -42,15 +42,15 @@ class ToastEngine extends AbstractEngine
         try {
             $crawler = $this->fetchWithSelenium($url, 8);
         } catch (\RuntimeException $e) {
-            return $this->success([], [], $this->getBlockedMessage($url));
+            // Selenium not available — try screenshot+OCR
+            return $this->scrapeViaScreenshot($url, 8);
         }
 
         $html = $crawler->html();
 
-        // Check if Cloudflare blocked us
+        // Check if Cloudflare blocked us — fall back to screenshot+OCR
         if ($this->isCloudflareBlocked($html)) {
-            // Extract restaurant slug to suggest alternatives
-            return $this->success([], $this->extractRestaurantInfo($crawler, $url), $this->getBlockedMessage($url));
+            return $this->scrapeViaScreenshot($url, 8);
         }
 
         // Try to extract JSON data from script tags (Toast embeds menu data)
@@ -59,6 +59,11 @@ class ToastEngine extends AbstractEngine
         // Fall back to DOM parsing
         if (empty($items)) {
             $items = $this->extractFromToastDom($crawler);
+        }
+
+        // If still nothing, try screenshot+OCR as last resort
+        if (empty($items)) {
+            return $this->scrapeViaScreenshot($url, 5);
         }
 
         // Extract restaurant info

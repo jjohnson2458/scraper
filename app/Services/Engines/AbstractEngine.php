@@ -198,6 +198,133 @@ abstract class AbstractEngine implements EngineInterface
     }
 
     /**
+     * Take a full-page screenshot via Selenium, run OCR, and return parsed items.
+     *
+     * This is the universal fallback — works on any site regardless of
+     * DOM structure, JS framework, or bot protection. As long as the page
+     * renders visually, we can extract the menu.
+     *
+     * @param string $url      The URL to screenshot.
+     * @param int    $waitSecs Seconds to wait for rendering.
+     * @return array{success: bool, items: array, restaurant: array, error: string|null}
+     */
+    protected function scrapeViaScreenshot(string $url, int $waitSecs = 10): array
+    {
+        $driver = null;
+        try {
+            $options = new \Facebook\WebDriver\Chrome\ChromeOptions();
+            $options->addArguments([
+                '--headless=new', '--disable-gpu', '--no-sandbox',
+                '--disable-dev-shm-usage', '--window-size=1920,4000',
+                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                '--disable-blink-features=AutomationControlled',
+            ]);
+            $options->setExperimentalOption('excludeSwitches', ['enable-automation']);
+            $options->setExperimentalOption('useAutomationExtension', false);
+
+            $capabilities = \Facebook\WebDriver\Remote\DesiredCapabilities::chrome();
+            $capabilities->setCapability(\Facebook\WebDriver\Chrome\ChromeOptions::CAPABILITY, $options);
+
+            $seleniumUrls = ['http://localhost:4444/wd/hub', 'http://localhost:4444', 'http://localhost:9515'];
+            foreach ($seleniumUrls as $seleniumUrl) {
+                try {
+                    $driver = \Facebook\WebDriver\Remote\RemoteWebDriver::create($seleniumUrl, $capabilities, 60000, 60000);
+                    break;
+                } catch (\Exception $e) {
+                    continue;
+                }
+            }
+
+            if (!$driver) {
+                return $this->success([], [], 'Selenium WebDriver is not running.');
+            }
+
+            // Navigate
+            $driver->get('about:blank');
+            try { $driver->executeScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"); } catch (\Exception $e) {}
+            $driver->get($url);
+
+            // Wait for CF + rendering
+            $maxWait = 30;
+            $waited = 0;
+            while ($waited < $maxWait) {
+                sleep(3);
+                $waited += 3;
+                $title = $driver->getTitle();
+                if (stripos($title, 'Just a moment') === false && stripos($title, 'Checking') === false) {
+                    break;
+                }
+            }
+            sleep($waitSecs);
+
+            // Scroll down to load lazy content
+            $driver->executeScript('window.scrollTo(0, document.body.scrollHeight / 3);');
+            sleep(2);
+            $driver->executeScript('window.scrollTo(0, document.body.scrollHeight * 2 / 3);');
+            sleep(2);
+            $driver->executeScript('window.scrollTo(0, document.body.scrollHeight);');
+            sleep(2);
+            $driver->executeScript('window.scrollTo(0, 0);');
+            sleep(1);
+
+            // Get restaurant name from title
+            $pageTitle = $driver->getTitle();
+            $restaurantName = $pageTitle && $pageTitle !== 'Just a moment...' ? $pageTitle : null;
+
+            // Take screenshot
+            $screenshotDir = sys_get_temp_dir() . '/scraper_screenshots';
+            if (!is_dir($screenshotDir)) {
+                mkdir($screenshotDir, 0755, true);
+            }
+            $screenshotPath = $screenshotDir . '/scan_' . uniqid() . '.png';
+            $driver->takeScreenshot($screenshotPath);
+
+            // Also grab og:image for banner before quitting
+            $bannerUrl = null;
+            try {
+                $html = $driver->getPageSource();
+                if (preg_match('/property="og:image"\s+content="([^"]+)"/', $html, $m)) {
+                    $bannerUrl = $m[1];
+                }
+            } catch (\Exception $e) {}
+
+            $driver->quit();
+            $driver = null;
+
+            if (!file_exists($screenshotPath) || filesize($screenshotPath) < 1000) {
+                return $this->success([], [], 'Screenshot capture failed.');
+            }
+
+            // OCR the screenshot
+            $ocrService = new \App\Services\OcrService();
+            $ocrResult = $ocrService->processImage($screenshotPath);
+
+            // Clean up screenshot
+            @unlink($screenshotPath);
+
+            if (!$ocrResult['success'] || empty($ocrResult['items'])) {
+                return $this->success(
+                    [],
+                    ['name' => $restaurantName, 'banner_url' => $bannerUrl, 'address' => null, 'phone' => null, 'logo_url' => null],
+                    $ocrResult['error'] ?? 'OCR could not extract menu items from the page screenshot.'
+                );
+            }
+
+            return $this->success(
+                $ocrResult['items'],
+                ['name' => $restaurantName, 'banner_url' => $bannerUrl, 'address' => null, 'phone' => null, 'logo_url' => null]
+            );
+
+        } catch (\Exception $e) {
+            if ($driver) {
+                try { $driver->quit(); } catch (\Exception $ignored) {}
+            }
+            $this->errorLog->log('Screenshot scrape failed: ' . $e->getMessage(), 'error', ['url' => $url]);
+            return $this->success([], [], 'Screenshot scrape failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Extract a price from a text string.
      *
      * @param string $text The text to search.
