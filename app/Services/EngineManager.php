@@ -114,7 +114,7 @@ class EngineManager
         // Check database platform registry (URL patterns)
         $platforms = $this->platformModel->getActive();
         foreach ($platforms as $platform) {
-            if (!empty($platform['url_pattern']) && preg_match('/' . $platform['url_pattern'] . '/i', $url)) {
+            if (!empty($platform['url_pattern']) && @preg_match('/' . $platform['url_pattern'] . '/i', $url)) {
                 // Try to instantiate the engine class
                 $engineClass = $platform['engine_class'] ?? null;
                 if ($engineClass && class_exists($engineClass)) {
